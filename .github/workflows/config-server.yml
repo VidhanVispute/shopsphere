@@ -39,6 +39,7 @@ jobs:
 
       - name: Build shared modules
         run: |
+          mvn install -f pom.xml -N -DskipTests
           mvn install -f shared/common-dtos/pom.xml -DskipTests
           mvn install -f shared/common-exceptions/pom.xml -DskipTests
           mvn install -f shared/common-utils/pom.xml -DskipTests
@@ -64,6 +65,7 @@ jobs:
 
       - name: Build JAR
         run: |
+          mvn install -f pom.xml -N -DskipTests
           mvn install -f shared/common-dtos/pom.xml -DskipTests
           mvn install -f shared/common-exceptions/pom.xml -DskipTests
           mvn install -f shared/common-utils/pom.xml -DskipTests
