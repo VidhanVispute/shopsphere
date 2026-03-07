@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.shopsphere</groupId>
+        <artifactId>shopsphere-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>api-gateway</artifactId>
+    <packaging>jar</packaging>
+    <name>ShopSphere API Gateway</name>
+
+    <dependencies>
+        <!--
+            Spring Cloud Gateway.
+            IMPORTANT: This pulls in Spring WebFlux automatically.
+            Do NOT add spring-boot-starter-web here.
+            WebFlux and Web (servlet) cannot coexist in the same app.
+            Adding both causes startup failure.
+        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-gateway</artifactId>
+        </dependency>
+
+        <!--
+            Eureka Client — Gateway registers with Eureka
+            AND uses it to discover downstream services.
+            The lb:// URI scheme only works when Eureka client
+            is on the classpath.
+        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+
+        <!--
+            Config Client — Gateway fetches its route configuration
+            from Config Server. This means you can add/modify routes
+            without redeploying the Gateway — just update the config
+            repo and refresh.
+        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-config</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-bootstrap</artifactId>
+        </dependency>
+
+        <!--
+            Redis — used for rate limiting.
+            Spring Cloud Gateway's RequestRateLimiter filter
+            uses Redis to track request counts per user/IP.
+            WHY Redis and not in-memory?
+            If you run 3 Gateway instances (for HA), in-memory
+            counters are per-instance. User could send 3x the
+            limit by hitting different instances.
+            Redis is shared across all instances — single counter.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
+            <!--
+                Note: -reactive suffix is required.
+                Gateway is reactive — it needs the reactive
+                Redis client, not the blocking one.
+            -->
+        </dependency>
+
+        <!-- JWT validation at the gateway -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Shared utils for JWT parsing -->
+        <dependency>
+            <groupId>com.shopsphere</groupId>
+            <artifactId>common-utils</artifactId>
+        </dependency>
+
+        <!-- Shared DTOs for error responses -->
+        <dependency>
+            <groupId>com.shopsphere</groupId>
+            <artifactId>common-dtos</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
