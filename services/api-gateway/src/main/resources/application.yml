@@ -1,0 +1,167 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  config:
+    import: optional:configserver:http://localhost:8888
+
+  # Redis for rate limiting
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:redis123}
+
+  cloud:
+    gateway:
+      # Global CORS — defined once here, applies to all routes
+      # Without this, browser preflight requests (OPTIONS) get blocked
+      globalcors:
+        cors-configurations:
+          "[/**]":
+            allowedOrigins:
+              - "http://localhost:3000" # React dev server
+            allowedMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+            allowedHeaders: ["*"]
+            allowCredentials: true
+
+      routes:
+        # ── Auth Service ─────────────────────────────────────────
+        - id: auth-service
+          uri: lb://auth-service
+          # lb:// = load balanced. Gateway asks Eureka for
+          # healthy instances of "auth-service" and picks one.
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 20
+                redis-rate-limiter.burstCapacity: 40
+                # replenishRate: tokens added per second (steady rate)
+                # burstCapacity: max tokens at once (allows short bursts)
+                # A user can make 20 req/s normally, burst to 40
+                # Login endpoint gets stricter limit (see auth-service.yml)
+
+        # ── User Service ──────────────────────────────────────────
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/users/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 30
+                redis-rate-limiter.burstCapacity: 60
+
+        # ── Product Service ───────────────────────────────────────
+        - id: product-service
+          uri: lb://product-service
+          predicates:
+            - Path=/api/products/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                # Products are browsed frequently → higher rate limit
+
+        # ── Search Service ────────────────────────────────────────
+        - id: search-service
+          uri: lb://search-service
+          predicates:
+            - Path=/api/search/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+
+        # ── Order Service ─────────────────────────────────────────
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+            - Path=/api/orders/**, /api/cart/**
+
+        # ── Payment Service ───────────────────────────────────────
+        - id: payment-service
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/payments/**
+
+        # ── Inventory Service ─────────────────────────────────────
+        - id: inventory-service
+          uri: lb://inventory-service
+          predicates:
+            - Path=/api/inventory/**
+
+        # ── Discount Service ──────────────────────────────────────
+        - id: discount-service
+          uri: lb://discount-service
+          predicates:
+            - Path=/api/coupons/**
+
+        # ── Notification Service ───────────────────────────────────
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/notifications/**, /ws/**
+
+        # ── Review Service ────────────────────────────────────────
+        - id: review-service
+          uri: lb://review-service
+          predicates:
+            - Path=/api/reviews/**
+
+        # ── Shipping Service ──────────────────────────────────────
+        - id: shipping-service
+          uri: lb://shipping-service
+          predicates:
+            - Path=/api/shipping/**
+
+        # ── Return Service ────────────────────────────────────────
+        - id: return-refund-service
+          uri: lb://return-refund-service
+          predicates:
+            - Path=/api/returns/**
+
+        # ── Vendor Service ────────────────────────────────────────
+        - id: vendor-service
+          uri: lb://vendor-service
+          predicates:
+            - Path=/api/vendors/**
+
+        # ── Admin Service ─────────────────────────────────────────
+        - id: admin-service
+          uri: lb://admin-service
+          predicates:
+            - Path=/api/admin/**
+          # Note: /api/admin/create is blocked by JwtAuthFilter
+          # before it even reaches this route
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    health:
+      show-details: always
+    gateway:
+      enabled: true
+      # /actuator/gateway shows all registered routes
+      # Useful for debugging routing issues
+
+jwt:
+  secret: 4b2f7v9KQx0p3Lm8sN6yW1dR5cTz8hJkPqX2aE9gH7m=
+  expiration-ms: 86400000
