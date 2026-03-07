@@ -1,0 +1,65 @@
+server:
+  port: 8761
+  # 8761 is the Eureka convention — same reason as 8888 for Config Server.
+  # All Spring Cloud services default to looking for Eureka at this port.
+
+spring:
+  application:
+    name: service-registry
+
+  # Import config from Config Server.
+  # The service-registry.yml in your config repo will be loaded.
+  # Falls back gracefully if Config Server is not running (optional: true)
+  config:
+    import: optional:configserver:http://localhost:8888
+
+eureka:
+  instance:
+    hostname: localhost
+
+  client:
+    # This is a Eureka SERVER — it should not try to register
+    # itself as a client with another Eureka server.
+    # Setting both to false prevents it from trying to find
+    # a peer Eureka server and failing on startup.
+    register-with-eureka: false
+    fetch-registry: false
+
+    service-url:
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
+      # This tells Eureka where its own registry endpoint is.
+      # In a HA setup (multiple Eureka instances), they peer with each other
+      # by listing each other's URLs here.
+
+  server:
+    # Disable self-preservation for local dev.
+    # WHY: Self-preservation is designed for production network partitions.
+    # Locally, when you stop a service, you WANT Eureka to remove it
+    # immediately so you don't see stale entries in the dashboard.
+    # In production (prod profile below), we re-enable it.
+    enable-self-preservation: false
+
+    # How quickly to evict instances that stop sending heartbeats.
+    # 2000ms for local dev = faster feedback when testing.
+    # Production default is 60000ms (60 seconds).
+    eviction-interval-timer-in-ms: 2000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+eureka:
+  server:
+    enable-self-preservation: true # Always on in production
+    eviction-interval-timer-in-ms: 60000
