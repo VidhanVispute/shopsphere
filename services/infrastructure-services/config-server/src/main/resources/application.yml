@@ -1,0 +1,65 @@
+server:
+  port: 8888
+  # 8888 is the Spring Cloud Config Server convention.
+  # All other services know to look here by default.
+  # Don't change this unless you update every service's config.
+
+spring:
+  application:
+    name: config-server
+
+  cloud:
+    config:
+      server:
+        git:
+          # This is where your config files live.
+          # For local dev we use a local Git repo (file:// URI).
+          # In production this becomes your actual GitHub/GitLab URL.
+          uri: ${CONFIG_REPO_URI:file:///C:/Users/vidhan/Desktop/shopsphere-config}
+          # ${CONFIG_REPO_URI:...} means:
+          #   Use the CONFIG_REPO_URI environment variable if set,
+          #   otherwise fall back to the local path.
+          # This is how the same application.yml works in
+          # local dev AND in production with no changes.
+
+          default-label: main
+          # Which Git branch to read config from.
+          # In production you'd have: dev branch, staging branch, main branch.
+          # Config Server checks out this branch when reading files.
+
+          clone-on-start: true
+          # Clone the config repo when Config Server starts, not on first request.
+          # WHY: If the Git repo is unreachable, you want to know at startup,
+          # not when the first service tries to fetch its config 10 minutes later.
+
+          force-pull: true
+          # Always pull latest from Git before serving config.
+          # Without this, Config Server serves from its local clone cache
+          # and might serve stale config after you push a change.
+
+# Actuator — expose health endpoint so other services and
+# Kubernetes liveness probes can check if Config Server is up
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+---
+# Production profile — overrides only what changes in prod
+spring:
+  config:
+    activate:
+      on-profile: prod
+  cloud:
+    config:
+      server:
+        git:
+          uri: ${CONFIG_REPO_URI}
+          # In prod, CONFIG_REPO_URI is a Kubernetes Secret injected
+          # as an environment variable. It contains the real GitHub URL
+          # with credentials embedded, e.g.:
+          # https://oauth2:TOKEN@github.com/yourorg/shopsphere-config.git
