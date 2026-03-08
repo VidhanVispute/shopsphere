@@ -1,78 +1,118 @@
 package com.shopsphere.common.util;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
+import lombok.extern.slf4j.Slf4j;
 
-import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
 import java.util.Date;
+import java.util.UUID;
 
-/**
- * JWT utility shared between Auth Service and API Gateway.
- *
- * Auth Service uses it to: generate tokens after login
- * API Gateway uses it to: validate tokens on every incoming request
- *
- * WHY HMAC-SHA256 (HS256)?
- * JWT can be signed with symmetric (same key for sign+verify = HS256)
- * or asymmetric (private key signs, public key verifies = RS256).
- * HS256 is simpler and fast. RS256 is better when multiple independent
- * parties need to verify tokens without sharing a secret.
- * For our setup — Gateway and Auth Service are both internal — HS256 is fine.
- *
- * IMPORTANT: The secret key must be at least 256 bits (32 characters).
- * This class does NOT store the secret — it receives it as a parameter.
- * The actual secret lives in application.yml (or Kubernetes Secret in prod).
- */
+@Slf4j
 public class JwtUtils {
 
-    private final SecretKey secretKey;
-    private final long expirationMs;
+    private final PrivateKey privateKey;
+    private final PublicKey publicKey;
+    private final long accessTokenExpirationMs;
 
-    public JwtUtils(String secret, long expirationMs) {
-        // Keys.hmacShaKeyFor ensures the key meets minimum length requirements
-        this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-        this.expirationMs = expirationMs;
+    // Auth Service constructor — sign + verify
+    public JwtUtils(String privateKeyPem, String publicKeyPem, long accessTokenExpirationMs) {
+        this.privateKey = loadPrivateKey(privateKeyPem);
+        this.publicKey = loadPublicKey(publicKeyPem);
+        this.accessTokenExpirationMs = accessTokenExpirationMs;
     }
 
-    public String generateToken(String email, String role, Long userId) {
+    // Gateway constructor — verify only
+    public JwtUtils(String publicKeyPem, long accessTokenExpirationMs) {
+        this.privateKey = null;
+        this.publicKey = loadPublicKey(publicKeyPem);
+        this.accessTokenExpirationMs = accessTokenExpirationMs;
+    }
+
+    public String generateAccessToken(String userId, String email, String role) {
+        if (privateKey == null) {
+            throw new IllegalStateException(
+                    "Private key not loaded. Only Auth Service can sign tokens.");
+        }
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + accessTokenExpirationMs);
         return Jwts.builder()
-                .subject(email)
+                .subject(userId)
+                .claim("email", email)
                 .claim("role", role)
-                .claim("userId", userId)
-                .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + expirationMs))
-                .signWith(secretKey)
+                .claim("type", "ACCESS")
+                .issuedAt(now)
+                .expiration(expiry)
+                .id(UUID.randomUUID().toString())
+                .signWith(privateKey)
                 .compact();
     }
 
-    public Claims extractAllClaims(String token) {
+    public boolean isTokenValid(String token) {
+        try {
+            getClaims(token);
+            return true;
+        } catch (JwtException | IllegalArgumentException e) {
+            log.debug("Invalid JWT: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    public String extractUserId(String token) {
+        return getClaims(token).getSubject();
+    }
+
+    public String extractEmail(String token) {
+        return getClaims(token).get("email", String.class);
+    }
+
+    public String extractRole(String token) {
+        return getClaims(token).get("role", String.class);
+    }
+
+    public Date extractExpiry(String token) {
+        return getClaims(token).getExpiration();
+    }
+
+    private Claims getClaims(String token) {
         return Jwts.parser()
-                .verifyWith(secretKey)
+                .verifyWith(publicKey)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
     }
 
-    public String extractEmail(String token) {
-        return extractAllClaims(token).getSubject();
-    }
-
-    public String extractRole(String token) {
-        return extractAllClaims(token).get("role", String.class);
-    }
-
-    public Long extractUserId(String token) {
-        return extractAllClaims(token).get("userId", Long.class);
-    }
-
-    public boolean isTokenValid(String token) {
+    private PrivateKey loadPrivateKey(String pem) {
         try {
-            return !extractAllClaims(token).getExpiration().before(new Date());
+            String stripped = pem
+                    .replace("-----BEGIN PRIVATE KEY-----", "")
+                    .replace("-----END PRIVATE KEY-----", "")
+                    .replaceAll("\\s+", "");
+            byte[] keyBytes = Base64.getDecoder().decode(stripped);
+            return KeyFactory.getInstance("RSA")
+                    .generatePrivate(new PKCS8EncodedKeySpec(keyBytes));
         } catch (Exception e) {
-            // Any parsing or signature failure means the token is invalid
-            return false;
+            throw new IllegalArgumentException("Failed to load RSA private key", e);
+        }
+    }
+
+    private PublicKey loadPublicKey(String pem) {
+        try {
+            String stripped = pem
+                    .replace("-----BEGIN PUBLIC KEY-----", "")
+                    .replace("-----END PUBLIC KEY-----", "")
+                    .replaceAll("\\s+", "");
+            byte[] keyBytes = Base64.getDecoder().decode(stripped);
+            return KeyFactory.getInstance("RSA")
+                    .generatePublic(new X509EncodedKeySpec(keyBytes));
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Failed to load RSA public key", e);
         }
     }
 }

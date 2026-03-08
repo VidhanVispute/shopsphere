@@ -56,11 +56,11 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             "/api/admin/create"
     );
 
-    public JwtAuthFilter(
-            @Value("${jwt.secret}") String secret,
-            @Value("${jwt.expiration-ms}") long expirationMs) {
-        this.jwtUtils = new JwtUtils(secret, expirationMs);
-    }
+   public JwtAuthFilter(
+        @Value("${jwt.public-key}") String publicKey,
+        @Value("${jwt.access-token-expiration-ms}") long expirationMs) {
+    this.jwtUtils = new JwtUtils(publicKey, expirationMs);
+}
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {

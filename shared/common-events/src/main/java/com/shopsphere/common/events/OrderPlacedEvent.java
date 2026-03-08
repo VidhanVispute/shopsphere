@@ -1,4 +1,4 @@
-package com.shopsphere.common.event;
+package com.shopsphere.common.events;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
