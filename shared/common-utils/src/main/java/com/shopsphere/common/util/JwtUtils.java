@@ -1,4 +1,4 @@
-﻿package com.shopsphere.common.util;
+package com.shopsphere.common.util;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
