@@ -2,6 +2,13 @@ server:
   port: 8080
 
 spring:
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        max.block.ms: 3000
+
   application:
     name: api-gateway
 
@@ -68,6 +75,17 @@ spring:
                 redis-rate-limiter.replenishRate: 50
                 redis-rate-limiter.burstCapacity: 100
                 # Products are browsed frequently → higher rate limit
+
+        # ── Categories (Product Service) ─────────────────────────────────────
+        - id: categories-service
+          uri: lb://product-service
+          predicates:
+            - Path=/api/categories/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
 
         # ── Search Service ────────────────────────────────────────
         - id: search-service
