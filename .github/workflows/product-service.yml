@@ -1,0 +1,94 @@
+name: Product Service CI/CD
+
+on:
+  push:
+    branches: ["feature/**", "develop", "main"]
+    paths:
+      - "services/product-services/product-service/**"
+      - "shared/**"
+      - "pom.xml"
+      - ".github/workflows/product-service.yml"
+  pull_request:
+    branches: ["develop", "main"]
+    paths:
+      - "services/product-services/product-service/**"
+      - "shared/**"
+      - "pom.xml"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: product_db
+          POSTGRES_USER: shopsphere
+          POSTGRES_PASSWORD: shopsphere123
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: maven
+
+      - name: Install parent POM
+        run: mvn install -f pom.xml -N -DskipTests -q
+
+      - name: Install shared modules
+        run: |
+          mvn install -f shared/common-dtos/pom.xml -DskipTests -q
+          mvn install -f shared/common-exceptions/pom.xml -DskipTests -q
+          mvn install -f shared/common-utils/pom.xml -DskipTests -q
+          mvn install -f shared/common-events/pom.xml -DskipTests -q
+
+      - name: Build product-service
+        run: mvn package -f services/product-services/product-service/pom.xml -DskipTests
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: product_db
+          DB_USERNAME: shopsphere
+          DB_PASSWORD: shopsphere123
+
+  docker-push:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            -t $ECR_REGISTRY/shopsphere/product-service:$IMAGE_TAG \
+            -t $ECR_REGISTRY/shopsphere/product-service:latest \
+            -f services/product-services/product-service/Dockerfile .
+          docker push $ECR_REGISTRY/shopsphere/product-service:$IMAGE_TAG
+          docker push $ECR_REGISTRY/shopsphere/product-service:latest
