@@ -1,0 +1,5 @@
+﻿title = "ShopSphere Gitleaks Config"
+
+[allowlist]
+  description = "Ignore historical commits before shared module cleanup"
+  commits = ["9eaf813f6cf406d20badfb9b8fdbf087e1c03008"]
