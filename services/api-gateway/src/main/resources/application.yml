@@ -44,14 +44,16 @@ spring:
           predicates:
             - Path=/api/auth/**
           filters:
+            - StripPrefix=1
             - name: RequestRateLimiter
               args:
                 redis-rate-limiter.replenishRate: 20
                 redis-rate-limiter.burstCapacity: 40
-                # replenishRate: tokens added per second (steady rate)
-                # burstCapacity: max tokens at once (allows short bursts)
-                # A user can make 20 req/s normally, burst to 40
-                # Login endpoint gets stricter limit (see auth-service.yml)
+                key-resolver: "#{@ipKeyResolver}"
+          # replenishRate: tokens added per second (steady rate)
+          # burstCapacity: max tokens at once (allows short bursts)
+          # A user can make 20 req/s normally, burst to 40
+          # Login endpoint gets stricter limit (see auth-service.yml)
 
         # ── User Service ──────────────────────────────────────────
         - id: user-service
@@ -59,10 +61,12 @@ spring:
           predicates:
             - Path=/api/users/**
           filters:
+            - StripPrefix=1
             - name: RequestRateLimiter
               args:
                 redis-rate-limiter.replenishRate: 30
                 redis-rate-limiter.burstCapacity: 60
+                key-resolver: "#{@ipKeyResolver}"
 
         # ── Product Service ───────────────────────────────────────
         - id: product-service
@@ -70,10 +74,12 @@ spring:
           predicates:
             - Path=/api/products/**
           filters:
+            - StripPrefix=1
             - name: RequestRateLimiter
               args:
                 redis-rate-limiter.replenishRate: 50
                 redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@ipKeyResolver}"
                 # Products are browsed frequently → higher rate limit
 
         # ── Categories (Product Service) ─────────────────────────────────────
@@ -82,10 +88,12 @@ spring:
           predicates:
             - Path=/api/categories/**
           filters:
+            - StripPrefix=1
             - name: RequestRateLimiter
               args:
                 redis-rate-limiter.replenishRate: 50
                 redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@ipKeyResolver}"
 
         # ── Search Service ────────────────────────────────────────
         - id: search-service
@@ -93,16 +101,49 @@ spring:
           predicates:
             - Path=/api/search/**
           filters:
+            - StripPrefix=1
             - name: RequestRateLimiter
               args:
                 redis-rate-limiter.replenishRate: 50
                 redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@ipKeyResolver}"
 
         # ── Order Service ─────────────────────────────────────────
-        - id: order-service
+        - id: order-service-cart
           uri: lb://order-service
           predicates:
-            - Path=/api/orders/**, /api/cart/**
+            - Path=/api/cart/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 20
+                redis-rate-limiter.burstCapacity: 40
+                key-resolver: "#{@ipKeyResolver}"
+
+        - id: order-service-orders
+          uri: lb://order-service
+          predicates:
+            - Path=/api/orders/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 20
+                redis-rate-limiter.burstCapacity: 40
+                key-resolver: "#{@ipKeyResolver}"
+
+        - id: order-service-admin
+          uri: lb://order-service
+          predicates:
+            - Path=/api/admin/orders/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                key-resolver: "#{@ipKeyResolver}"
 
         # ── Payment Service ───────────────────────────────────────
         - id: payment-service

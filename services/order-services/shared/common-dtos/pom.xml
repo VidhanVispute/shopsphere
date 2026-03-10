@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        Point to parent. relativePath tells Maven where to find it.
+        ../.. means: go up two levels from shared/common-dtos/ to reach root.
+        Maven verifies this path exists at build time.
+    -->
+    <parent>
+        <groupId>com.shopsphere</groupId>
+        <artifactId>shopsphere-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <!--
+        This module's identity.
+        groupId is inherited from parent — no need to repeat it.
+        artifactId must match the folder name by convention.
+        packaging = jar because this module produces a JAR
+        that other services will import as a dependency.
+    -->
+    <artifactId>common-dtos</artifactId>
+    <packaging>jar</packaging>
+    <name>ShopSphere Common DTOs</name>
+
+    <!--
+        No dependencies needed here.
+        DTOs are plain Java classes — just fields, getters, setters.
+        Lombok is already inherited from parent so @Data, @Builder work.
+        No Spring, no database, no Kafka. Just data shapes.
+    -->
+
+</project>
