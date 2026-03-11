@@ -1,0 +1,64 @@
+name: OWASP Dependency Check
+
+on:
+  # Run every Sunday at midnight — catches new CVEs weekly
+  schedule:
+    - cron: "0 0 * * 0"
+
+  # Allow manual trigger from GitHub Actions UI
+  workflow_dispatch:
+
+  # Also run on PRs that touch dependencies
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "**/pom.xml"
+      - ".github/workflows/owasp-check.yml"
+
+jobs:
+  owasp-scan:
+    name: OWASP Dependency Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: maven
+
+      - name: Build shared libraries (required before scan)
+        run: |
+          mvn install -f pom.xml -N -DskipTests -q
+          mvn install -f shared/common-dtos/pom.xml -DskipTests -q
+          mvn install -f shared/common-exceptions/pom.xml -DskipTests -q
+          mvn install -f shared/common-utils/pom.xml -DskipTests -q
+          mvn install -f shared/common-events/pom.xml -DskipTests -q
+
+      - name: Run OWASP Dependency Check (all modules)
+        run: mvn dependency-check:aggregate -Powasp --no-transfer-progress
+        env:
+          # NVD API key gives 50 req/s instead of 3 req/s — dramatically
+          # faster database download. Get free key at nvd.nist.gov/developers
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+
+      - name: Upload HTML report as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        # always() = upload even if scan fails (so you can see the report)
+        with:
+          name: owasp-dependency-check-report
+          path: target/dependency-check-report/
+          retention-days: 30
+
+      - name: Upload JSON report for parsing
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owasp-dependency-check-json
+          path: target/dependency-check-report/*.json
+          retention-days: 30
