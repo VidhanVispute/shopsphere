@@ -150,54 +150,143 @@ spring:
           uri: lb://payment-service
           predicates:
             - Path=/api/payments/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@ipKeyResolver}"
 
         # ── Inventory Service ─────────────────────────────────────
         - id: inventory-service
           uri: lb://inventory-service
           predicates:
             - Path=/api/inventory/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@ipKeyResolver}"
+
+        # ── Inventory Service (Admin) ─────────────────────────────
+        - id: inventory-service-admin
+          uri: lb://inventory-service
+          predicates:
+            - Path=/api/admin/inventory/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                key-resolver: "#{@ipKeyResolver}"
+
+        # ── Inventory Service (Internal) ──────────────────────────
+        - id: inventory-service-internal
+          uri: lb://inventory-service
+          predicates:
+            - Path=/api/internal/inventory/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@ipKeyResolver}"
 
         # ── Discount Service ──────────────────────────────────────
         - id: discount-service
           uri: lb://discount-service
           predicates:
             - Path=/api/coupons/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@ipKeyResolver}"
 
         # ── Notification Service ───────────────────────────────────
         - id: notification-service
           uri: lb://notification-service
           predicates:
             - Path=/api/notifications/**, /ws/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@ipKeyResolver}"
 
         # ── Review Service ────────────────────────────────────────
         - id: review-service
           uri: lb://review-service
           predicates:
             - Path=/api/reviews/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@ipKeyResolver}"
 
         # ── Shipping Service ──────────────────────────────────────
         - id: shipping-service
           uri: lb://shipping-service
           predicates:
             - Path=/api/shipping/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@ipKeyResolver}"
 
         # ── Return Service ────────────────────────────────────────
         - id: return-refund-service
           uri: lb://return-refund-service
           predicates:
             - Path=/api/returns/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@ipKeyResolver}"
 
         # ── Vendor Service ────────────────────────────────────────
         - id: vendor-service
           uri: lb://vendor-service
           predicates:
             - Path=/api/vendors/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@ipKeyResolver}"
 
         # ── Admin Service ─────────────────────────────────────────
         - id: admin-service
           uri: lb://admin-service
           predicates:
             - Path=/api/admin/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@ipKeyResolver}"
           # Note: /api/admin/create is blocked by JwtAuthFilter
           # before it even reaches this route
 
