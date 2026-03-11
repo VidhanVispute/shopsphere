@@ -246,6 +246,21 @@
     <build>
         <pluginManagement>
             <plugins>
+
+                <plugin>
+                    <groupId>org.owasp</groupId>
+                    <artifactId>dependency-check-maven</artifactId>
+                    <version>9.2.0</version>
+                    <configuration>
+                        <failBuildOnCVSS>7</failBuildOnCVSS>
+                        <suppressionFile>${project.basedir}/owasp-suppressions.xml</suppressionFile>
+                        <formats>HTML,JSON</formats>
+                        <outputDirectory>${project.build.directory}/dependency-check-report</outputDirectory>
+                        <nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
+                        <!-- Skip test-scope dependencies — they never reach production -->
+                        <skipTestScope>true</skipTestScope>
+                    </configuration>
+                </plugin>
                 <plugin>
                     <groupId>org.springframework.boot</groupId>
                     <artifactId>spring-boot-maven-plugin</artifactId>
@@ -294,5 +309,31 @@
             </plugins>
         </pluginManagement>
     </build>
+
+    <profiles>
+    <!-- Activate with: mvn verify -Powasp
+         Or in CI via: mvn dependency-check:aggregate -Powasp
+         Kept as a profile so normal mvn verify stays fast locally -->
+    <profile>
+        <id>owasp</id>
+        <build>
+            <plugins>
+                <plugin>
+                    <groupId>org.owasp</groupId>
+                    <artifactId>dependency-check-maven</artifactId>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <!-- aggregate scans ALL modules in one run
+                                     instead of scanning each service separately -->
+                                <goal>aggregate</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </build>
+    </profile>
+</profiles>
 
 </project>
