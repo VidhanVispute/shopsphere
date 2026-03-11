@@ -104,7 +104,7 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
         // 7. Inject trusted headers
         ServerHttpRequest modifiedRequest = request.mutate()
                 .header("X-User-Id", userId)
-                .header("X-User-Role", role)
+                .header("X-User-Role", rawRole)
                 .header("X-User-Email", email)
                 .build();
 

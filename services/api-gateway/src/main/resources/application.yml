@@ -112,7 +112,7 @@ spring:
         - id: order-service-cart
           uri: lb://order-service
           predicates:
-            - Path=/api/cart/**
+            - Path=/api/cart, /api/cart/**
           filters:
             - StripPrefix=1
             - name: RequestRateLimiter
@@ -124,7 +124,7 @@ spring:
         - id: order-service-orders
           uri: lb://order-service
           predicates:
-            - Path=/api/orders/**
+            - Path=/api/orders, /api/orders/**
           filters:
             - StripPrefix=1
             - name: RequestRateLimiter
