@@ -34,7 +34,8 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
     // Public GET endpoints
     private static final List<String> PUBLIC_GET_PATHS = List.of(
             "/api/products",
-            "/api/categories"
+            "/api/categories",
+            "/api/inventory"
     );
 
     // Completely blocked endpoints
