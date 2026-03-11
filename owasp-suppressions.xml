@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- OWASP Dependency Check Suppressions
+     Add false positives here with a justification comment.
+     Each suppression must have a documented reason.
+     Format: https://jeremylong.github.io/DependencyCheck/general/suppression.html -->
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+
+    <!-- Example suppression — uncomment and edit when needed:
+    <suppress>
+        <notes>CVE-XXXX-YYYY: This CVE affects feature X which we do not use.</notes>
+        <cve>CVE-XXXX-YYYY</cve>
+    </suppress>
+    -->
+
+</suppressions>
