@@ -29,7 +29,7 @@ public class CartService {
     @Transactional
     public CartItemResponse addToCart(UUID userId, AddToCartRequest request) {
         // 1. Fetch product from Product Service via Feign
-        ProductResponse product = getProduct(request.getProductId());
+        ProductResponse product = getProduct(request.getId());
 
         // 2. Validate product is available
         if (!"ACTIVE".equals(product.getStatus())) {
@@ -45,7 +45,7 @@ public class CartService {
 
         // 3. If already in cart — update quantity
         var existing = cartItemRepository
-                .findByUserIdAndProductId(userId, request.getProductId());
+                .findByUserIdAndProductId(userId, request.getId());
 
         CartItem cartItem;
         if (existing.isPresent()) {
@@ -64,7 +64,7 @@ public class CartService {
         }
 
         cartItem = cartItemRepository.save(cartItem);
-        log.info("Cart updated for user {} — product {}", userId, request.getProductId());
+        log.info("Cart updated for user {} — product {}", userId, request.getId());
         return toCartItemResponse(cartItem);
     }
 

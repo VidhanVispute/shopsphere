@@ -27,14 +27,15 @@ public class HeaderAuthFilter extends OncePerRequestFilter {
         if (userId != null && userRole != null) {
 
     String role = switch (userRole) {
-        case "CUSTOMER" -> "ROLE_USER";
-        case "ADMIN" -> "ROLE_ADMIN";
-        default -> "ROLE_USER";
-    };
+    case "CUSTOMER" -> "ROLE_USER";
+    case "ADMIN"    -> "ROLE_ADMIN";
+    case "VENDOR"   -> "ROLE_VENDOR";
+    default         -> "ROLE_USER";
+};
 
     var authorities = Collections.singletonList(
-            new SimpleGrantedAuthority(role)
-    );
+        new SimpleGrantedAuthority(role)  
+);
 
     var authentication = new UsernamePasswordAuthenticationToken(
             userId, userEmail, authorities

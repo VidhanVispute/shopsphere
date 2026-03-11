@@ -214,7 +214,7 @@ public class ProductService {
                 .findFirst().orElse(null);
 
         return ProductResponse.builder()
-                .id(product.getId())
+                .productId(product.getId())
                 .name(product.getName())
                 .description(product.getDescription())
                 .price(product.getPrice())

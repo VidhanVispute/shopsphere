@@ -1,5 +1,6 @@
 package com.shopsphere.product.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.shopsphere.product.entity.Product;
 import lombok.Builder;
 import lombok.Data;
@@ -12,7 +13,8 @@ import java.util.UUID;
 @Data @Builder
 public class ProductResponse {
 
-    private UUID id;
+    @JsonProperty("id")
+    private UUID productId;
     private String name;
     private String description;
     private BigDecimal price;

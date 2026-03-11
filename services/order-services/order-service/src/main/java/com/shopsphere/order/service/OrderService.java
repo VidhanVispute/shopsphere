@@ -57,8 +57,9 @@ public class OrderService {
         }
 
         // 3. Validate each product and build order items
-        //    Re-fetch price from Product Service — never trust cart price for final order
         List<OrderItem> orderItems = cartItems.stream().map(cartItem -> {
+            // ✅ BUG 1 FIX: was passing cartItem.getId() (CartItem's own UUID)
+            // must pass cartItem.getProductId() to fetch the correct product
             ProductResponse product = fetchProduct(cartItem.getProductId());
 
             if (!"ACTIVE".equals(product.getStatus())) {
@@ -72,6 +73,7 @@ public class OrderService {
             }
 
             return OrderItem.builder()
+                    // ✅ BUG 2 FIX: was product.getProductId() — field is now getId()
                     .productId(product.getId())
                     .vendorId(product.getVendorId())
                     .productName(product.getName())
@@ -130,7 +132,6 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Order not found: " + orderId));
 
-        // Ownership check — user can only see their own orders
         if (!order.getUserId().equals(userId)) {
             throw new ResourceNotFoundException("Order not found: " + orderId);
         }
@@ -246,7 +247,9 @@ public class OrderService {
     private OrderResponse toOrderResponse(Order order) {
         List<OrderItemResponse> itemResponses = order.getItems().stream()
                 .map(item -> OrderItemResponse.builder()
-                        .id(item.getId())
+                        // ✅ BUG 3 FIX: was item.getId() which is OrderItem's own UUID
+                        // orderId should be the parent order's ID
+                        .orderId(item.getOrder().getId())
                         .productId(item.getProductId())
                         .vendorId(item.getVendorId())
                         .productName(item.getProductName())
