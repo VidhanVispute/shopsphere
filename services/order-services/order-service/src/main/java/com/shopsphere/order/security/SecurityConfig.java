@@ -19,6 +19,8 @@ public class SecurityConfig {
         return new HeaderAuthFilter();
     }
 
+    // Prevents Spring Boot from auto-registering the filter
+    // outside of the security chain (would run twice otherwise)
     @Bean
     public FilterRegistrationBean<HeaderAuthFilter> headerAuthFilterRegistration() {
         FilterRegistrationBean<HeaderAuthFilter> registration = new FilterRegistrationBean<>();
@@ -33,21 +35,28 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .addFilterBefore(headerAuthFilter(),
-                UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(headerAuthFilter(), UsernamePasswordAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/actuator/health").permitAll()
-                .requestMatchers(HttpMethod.GET,  "/cart").hasAuthority("ROLE_USER")
-                .requestMatchers(HttpMethod.POST, "/cart").hasAuthority("ROLE_USER")
-                .requestMatchers(HttpMethod.PUT,  "/cart/*").hasAuthority("ROLE_USER")
+                .requestMatchers("/actuator/**").permitAll()
+                .requestMatchers("/error").permitAll()
+
+                // Cart endpoints — customers only
+                .requestMatchers(HttpMethod.GET,    "/cart").hasAuthority("ROLE_USER")
+                .requestMatchers(HttpMethod.POST,   "/cart").hasAuthority("ROLE_USER")
+                .requestMatchers(HttpMethod.PUT,    "/cart/*").hasAuthority("ROLE_USER")
                 .requestMatchers(HttpMethod.DELETE, "/cart/*").hasAuthority("ROLE_USER")
                 .requestMatchers(HttpMethod.DELETE, "/cart").hasAuthority("ROLE_USER")
+
+                // Order endpoints — customers only
                 .requestMatchers(HttpMethod.POST, "/orders").hasAuthority("ROLE_USER")
                 .requestMatchers(HttpMethod.GET,  "/orders").hasAuthority("ROLE_USER")
                 .requestMatchers(HttpMethod.GET,  "/orders/*").hasAuthority("ROLE_USER")
                 .requestMatchers(HttpMethod.POST, "/orders/*/cancel").hasAuthority("ROLE_USER")
-                .requestMatchers(HttpMethod.GET,  "/admin/orders").hasAuthority("ROLE_ADMIN")
-                .requestMatchers(HttpMethod.PUT,  "/admin/orders/*/status").hasAuthority("ROLE_ADMIN")
+
+                // Admin endpoints — admins only
+                .requestMatchers(HttpMethod.GET, "/admin/orders").hasAuthority("ROLE_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/admin/orders/*/status").hasAuthority("ROLE_ADMIN")
+
                 .anyRequest().authenticated()
             );
 

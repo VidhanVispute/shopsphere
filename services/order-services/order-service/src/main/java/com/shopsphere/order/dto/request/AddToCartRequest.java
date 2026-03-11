@@ -10,9 +10,11 @@ import java.util.UUID;
 public class AddToCartRequest {
 
     @NotNull(message = "Product ID is required")
-    private UUID productId;
+    private UUID id;
 
     @NotNull(message = "Quantity is required")
     @Min(value = 1, message = "Quantity must be at least 1")
     private Integer quantity;
+
+    
 }

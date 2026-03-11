@@ -1,6 +1,10 @@
 server:
   port: 8086
 
+logging:
+  level:
+    org.springframework.security: DEBUG
+
 spring:
   application:
     name: order-service
