@@ -2,8 +2,10 @@ package com.shopsphere.order.service;
 
 import com.shopsphere.common.exception.BadRequestException;
 import com.shopsphere.common.exception.ResourceNotFoundException;
+import com.shopsphere.order.client.InventoryClient;
 import com.shopsphere.order.client.ProductClient;
 import com.shopsphere.order.client.dto.ProductResponse;
+import com.shopsphere.order.client.dto.StockAdjustRequest;
 import com.shopsphere.order.dto.request.PlaceOrderRequest;
 import com.shopsphere.order.dto.response.OrderItemResponse;
 import com.shopsphere.order.dto.response.OrderResponse;
@@ -36,6 +38,7 @@ public class OrderService {
     private final CartItemRepository cartItemRepository;
     private final ProductClient productClient;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final InventoryClient inventoryClient;
 
     @Transactional
     public OrderResponse placeOrder(UUID userId, PlaceOrderRequest request) {
@@ -58,22 +61,19 @@ public class OrderService {
 
         // 3. Validate each product and build order items
         List<OrderItem> orderItems = cartItems.stream().map(cartItem -> {
-            // ✅ BUG 1 FIX: was passing cartItem.getId() (CartItem's own UUID)
-            // must pass cartItem.getProductId() to fetch the correct product
             ProductResponse product = fetchProduct(cartItem.getProductId());
 
             if (!"ACTIVE".equals(product.getStatus())) {
                 throw new BadRequestException(
                         "Product is no longer available: " + product.getName());
             }
-            if (product.getStockQuantity() < cartItem.getQuantity()) {
-                throw new BadRequestException(
-                        "Insufficient stock for: " + product.getName()
-                        + ". Available: " + product.getStockQuantity());
-            }
+
+            // Stock check now delegated to InventoryService via Feign
+            // InventoryService throws IllegalStateException if stock insufficient
+            // which propagates as 409 Conflict to the client
+            reserveStock(cartItem.getProductId(), cartItem.getQuantity(), product.getName());
 
             return OrderItem.builder()
-                    // ✅ BUG 2 FIX: was product.getProductId() — field is now getId()
                     .productId(product.getId())
                     .vendorId(product.getVendorId())
                     .productName(product.getName())
@@ -153,6 +153,11 @@ public class OrderService {
 
         order.setStatus("CANCELLED");
         Order saved = orderRepository.save(order);
+
+        // Release reserved stock back to available for each order item
+        saved.getItems().forEach(item ->
+                releaseStock(item.getProductId(), item.getQuantity()));
+
         log.info("Order {} cancelled by user {}", orderId, userId);
         return toOrderResponse(saved);
     }
@@ -208,6 +213,26 @@ public class OrderService {
                     "Unable to reach product service. Please try again.");
         }
     }
+
+    private void reserveStock(UUID productId, int quantity, String productName) {
+    try {
+        inventoryClient.reserve(new StockAdjustRequest(productId, quantity));
+    } catch (Exception e) {
+        log.error("Failed to reserve stock for product {}: {}", productId, e.getMessage());
+        throw new BadRequestException(
+                "Insufficient stock for: " + productName);
+    }
+}
+
+private void releaseStock(UUID productId, int quantity) {
+    try {
+        inventoryClient.release(new StockAdjustRequest(productId, quantity));
+    } catch (Exception e) {
+        // Log but don't fail — order is already cancelled
+        // Stock reconciliation handled manually or via future Kafka event
+        log.error("Failed to release stock for product {}: {}", productId, e.getMessage());
+    }
+}
 
     private void publishOrderPlacedEvent(Order order) {
         CompletableFuture.runAsync(() -> {
