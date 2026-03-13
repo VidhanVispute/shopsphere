@@ -1,13 +1,9 @@
 server:
-  port: 8086
-
-logging:
-  level:
-    org.springframework.security: DEBUG
+  port: 8088
 
 spring:
   application:
-    name: order-service
+    name: notification-service
 
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
@@ -16,7 +12,7 @@ spring:
     password: ${RABBITMQ_PASSWORD:shopsphere123}
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/order_db
+    url: jdbc:postgresql://localhost:5432/notification_db
     username: ${DB_USERNAME:shopsphere}
     password: ${DB_PASSWORD:shopsphere123}
     driver-class-name: org.postgresql.Driver
@@ -28,7 +24,6 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
 
   flyway:
     enabled: true
@@ -49,23 +44,18 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
-  endpoint:
-    health:
-      show-details: when-authorized
+        include: health,info
 
-feign:
-  client:
-    config:
-      default:
-        connect-timeout: 3000
-        read-timeout: 5000
-  circuitbreaker:
-    enabled: false
+sendgrid:
+  api-key: ${SENDGRID_API_KEY}
+  from-email: ${SENDGRID_FROM_EMAIL:vispute.vidhan.it@gmail.com}
+  from-name: ShopSphere
 
 app:
   rabbitmq:
     exchange: shopsphere.events
+    queue:
+      notification: notification.queue
     routing-key:
       order-placed: order.placed
       order-confirmed: order.confirmed

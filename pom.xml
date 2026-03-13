@@ -79,8 +79,8 @@
         <module>services/vendor-services/vendor-analytics-service</module> -->
 
         <!-- Support -->
-        <!-- <module>services/support-services/notification-service</module>
-        <module>services/support-services/admin-analytics-service</module>
+        <module>services/support-services/notification-service</module>
+        <!-- <module>services/support-services/admin-analytics-service</module>
         <module>services/support-services/content-banner-service</module> -->
     </modules>
 

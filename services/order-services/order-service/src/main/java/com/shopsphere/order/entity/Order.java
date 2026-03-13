@@ -26,6 +26,9 @@ public class Order {
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
+    @Column(name = "user_email")
+    private String userEmail;
+
     @Column(nullable = false)
     private String status;
 

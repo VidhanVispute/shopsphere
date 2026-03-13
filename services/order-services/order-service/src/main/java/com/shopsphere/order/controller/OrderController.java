@@ -26,11 +26,12 @@ public class OrderController {
     @PostMapping
     public ResponseEntity<ApiResponse<OrderResponse>> placeOrder(
             Authentication auth,
+            @RequestHeader(value = "X-User-Email", required = false) String userEmail,
             @Valid @RequestBody PlaceOrderRequest request) {
         UUID userId = UUID.fromString(auth.getName());
-        OrderResponse order = orderService.placeOrder(userId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Order placed successfully", order));
+                .body(ApiResponse.success("Order placed successfully",
+                        orderService.placeOrder(userId, userEmail, request)));
     }
 
     @GetMapping
