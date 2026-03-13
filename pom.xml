@@ -55,8 +55,8 @@
         <module>services/api-gateway</module>
 
         <!-- Identity -->
-        <module>services/identity-services/auth-service</module>
-        <module>services/identity-services/user-service</module>
+        <!-- <module>services/identity-services/auth-service</module>
+        <module>services/identity-services/user-service</module> -->
         <!-- <module>services/identity-services/admin-service</module>
         <module>services/identity-services/vendor-service</module> -->
 
