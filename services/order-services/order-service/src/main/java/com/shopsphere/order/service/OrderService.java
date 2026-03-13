@@ -3,7 +3,9 @@ package com.shopsphere.order.service;
 import com.shopsphere.common.exception.BadRequestException;
 import com.shopsphere.common.exception.ResourceNotFoundException;
 import com.shopsphere.order.client.InventoryClient;
+import com.shopsphere.order.client.PaymentClient;
 import com.shopsphere.order.client.ProductClient;
+import com.shopsphere.order.client.dto.InitiatePaymentRequest;
 import com.shopsphere.order.client.dto.ProductResponse;
 import com.shopsphere.order.client.dto.StockAdjustRequest;
 import com.shopsphere.order.dto.request.PlaceOrderRequest;
@@ -22,6 +24,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -39,6 +43,7 @@ public class OrderService {
     private final ProductClient productClient;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final InventoryClient inventoryClient;
+    private final PaymentClient paymentClient;
 
     @Transactional
     public OrderResponse placeOrder(UUID userId, PlaceOrderRequest request) {
@@ -68,9 +73,6 @@ public class OrderService {
                         "Product is no longer available: " + product.getName());
             }
 
-            // Stock check now delegated to InventoryService via Feign
-            // InventoryService throws IllegalStateException if stock insufficient
-            // which propagates as 409 Conflict to the client
             reserveStock(cartItem.getProductId(), cartItem.getQuantity(), product.getName());
 
             return OrderItem.builder()
@@ -98,7 +100,6 @@ public class OrderService {
                 .notes(request.getNotes())
                 .build();
 
-        // Link items to order
         orderItems.forEach(item -> {
             item.setOrder(order);
             order.getItems().add(item);
@@ -113,12 +114,64 @@ public class OrderService {
         orderedProductIds.forEach(productId ->
                 cartItemRepository.deleteByUserIdAndProductId(userId, productId));
 
-        // 7. Publish OrderPlacedEvent async — fire and forget
+        // 7. Initiate payment AFTER transaction commits.
+        //
+        //    WHY afterCommit():
+        //    paymentClient.initiatePayment() is synchronous — for COD, PaymentService
+        //    immediately calls back PUT /internal/orders/{id}/confirm within the same
+        //    thread cycle. If we call initiatePayment() inside this @Transactional
+        //    method, the order row is NOT yet visible in the DB (transaction not
+        //    committed), so confirmOrder() does a SELECT and gets 404.
+        //
+        //    afterCommit() fires once Hibernate has flushed + the DB transaction has
+        //    committed, guaranteeing the order row exists before PaymentService reads it.
+        //
+        //    RAZORPAY flow is unaffected — it just returns a razorpayOrderId, the
+        //    confirm call comes later via webhook.
+
+        final UUID orderId      = savedOrder.getId();
+        final UUID orderUserId  = savedOrder.getUserId();
+        final BigDecimal amount = savedOrder.getTotalAmount();
+        final String method     = savedOrder.getPaymentMethod();
+
+        TransactionSynchronizationManager.registerSynchronization(
+            new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    try {
+                        InitiatePaymentRequest paymentReq = new InitiatePaymentRequest(
+                                orderId, orderUserId, amount, method);
+                        paymentClient.initiatePayment(paymentReq);
+                        log.info("Payment initiated for order {}", orderId);
+                    } catch (Exception e) {
+                        log.error("Payment initiation failed for order {}: {}",
+                                orderId, e.getMessage());
+                        // Order is saved — payment can be retried via admin or webhook
+                    }
+                }
+            }
+        );
+
+        // 8. Publish OrderPlacedEvent async — fire and forget
         publishOrderPlacedEvent(savedOrder);
 
         log.info("Order {} placed for user {}", savedOrder.getId(), userId);
         return toOrderResponse(savedOrder);
     }
+
+    // ── Called by PaymentService via Feign ────────────────────────────────────
+
+    @Transactional
+    public void confirmOrder(UUID orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Order not found: " + orderId));
+        order.setStatus("CONFIRMED");
+        orderRepository.save(order);
+        log.info("Order {} confirmed by PaymentService", orderId);
+    }
+
+    // ── User queries ──────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public Page<OrderResponse> getMyOrders(UUID userId, Pageable pageable) {
@@ -154,7 +207,6 @@ public class OrderService {
         order.setStatus("CANCELLED");
         Order saved = orderRepository.save(order);
 
-        // Release reserved stock back to available for each order item
         saved.getItems().forEach(item ->
                 releaseStock(item.getProductId(), item.getQuantity()));
 
@@ -201,8 +253,7 @@ public class OrderService {
         try {
             var response = productClient.getProductById(productId);
             if (response == null || response.getData() == null) {
-                throw new ResourceNotFoundException(
-                        "Product not found: " + productId);
+                throw new ResourceNotFoundException("Product not found: " + productId);
             }
             return response.getData();
         } catch (ResourceNotFoundException e) {
@@ -215,24 +266,23 @@ public class OrderService {
     }
 
     private void reserveStock(UUID productId, int quantity, String productName) {
-    try {
-        inventoryClient.reserve(new StockAdjustRequest(productId, quantity));
-    } catch (Exception e) {
-        log.error("Failed to reserve stock for product {}: {}", productId, e.getMessage());
-        throw new BadRequestException(
-                "Insufficient stock for: " + productName);
+        try {
+            inventoryClient.reserve(new StockAdjustRequest(productId, quantity));
+        } catch (Exception e) {
+            log.error("Failed to reserve stock for product {}: {}",
+                    productId, e.getMessage());
+            throw new BadRequestException("Insufficient stock for: " + productName);
+        }
     }
-}
 
-private void releaseStock(UUID productId, int quantity) {
-    try {
-        inventoryClient.release(new StockAdjustRequest(productId, quantity));
-    } catch (Exception e) {
-        // Log but don't fail — order is already cancelled
-        // Stock reconciliation handled manually or via future Kafka event
-        log.error("Failed to release stock for product {}: {}", productId, e.getMessage());
+    private void releaseStock(UUID productId, int quantity) {
+        try {
+            inventoryClient.release(new StockAdjustRequest(productId, quantity));
+        } catch (Exception e) {
+            log.error("Failed to release stock for product {}: {}",
+                    productId, e.getMessage());
+        }
     }
-}
 
     private void publishOrderPlacedEvent(Order order) {
         CompletableFuture.runAsync(() -> {
@@ -272,8 +322,6 @@ private void releaseStock(UUID productId, int quantity) {
     private OrderResponse toOrderResponse(Order order) {
         List<OrderItemResponse> itemResponses = order.getItems().stream()
                 .map(item -> OrderItemResponse.builder()
-                        // ✅ BUG 3 FIX: was item.getId() which is OrderItem's own UUID
-                        // orderId should be the parent order's ID
                         .orderId(item.getOrder().getId())
                         .productId(item.getProductId())
                         .vendorId(item.getVendorId())

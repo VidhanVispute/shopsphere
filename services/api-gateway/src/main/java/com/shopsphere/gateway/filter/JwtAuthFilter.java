@@ -28,7 +28,8 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
     private static final List<String> PUBLIC_ENDPOINTS = List.of(
             "/api/auth/",
             "/api/search",
-            "/actuator/health"
+            "/actuator/health",
+            "/api/payments/webhook/"
     );
 
     // Public GET endpoints
