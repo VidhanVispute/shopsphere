@@ -49,6 +49,7 @@ jobs:
       - name: Build Docker image
         run: |
           docker build -t notification-service:${{ github.sha }} \
+            -f services/support-services/notification-service/Dockerfile \
             services/support-services/notification-service/
 
       - name: Trivy vulnerability scan
