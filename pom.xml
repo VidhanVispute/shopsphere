@@ -57,31 +57,31 @@
         <!-- Identity -->
         <module>services/identity-services/auth-service</module>
         <module>services/identity-services/user-service</module>
-        <module>services/identity-services/admin-service</module>
-        <module>services/identity-services/vendor-service</module>
+        <!-- <module>services/identity-services/admin-service</module>
+        <module>services/identity-services/vendor-service</module> -->
 
         <!-- Products -->
         <module>services/product-services/product-service</module>
         <module>services/product-services/inventory-service</module>
-        <module>services/product-services/search-service</module>
-        <module>services/product-services/review-service</module>
+        <!-- <module>services/product-services/search-service</module>
+        <module>services/product-services/review-service</module> -->
 
         <!-- Orders -->
         <module>services/order-services/order-service</module>
         <module>services/order-services/payment-service</module>
-        <module>services/order-services/discount-service</module>
+        <!-- <module>services/order-services/discount-service</module>
         <module>services/order-services/shipping-service</module>
-        <module>services/order-services/return-refund-service</module>
+        <module>services/order-services/return-refund-service</module> -->
 
         <!-- Vendor -->
-        <module>services/vendor-services/vendor-product-service</module>
+        <!-- <module>services/vendor-services/vendor-product-service</module>
         <module>services/vendor-services/vendor-payout-service</module>
-        <module>services/vendor-services/vendor-analytics-service</module>
+        <module>services/vendor-services/vendor-analytics-service</module> -->
 
         <!-- Support -->
-        <module>services/support-services/notification-service</module>
+        <!-- <module>services/support-services/notification-service</module>
         <module>services/support-services/admin-analytics-service</module>
-        <module>services/support-services/content-banner-service</module>
+        <module>services/support-services/content-banner-service</module> -->
     </modules>
 
     <!--
