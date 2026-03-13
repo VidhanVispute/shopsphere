@@ -60,3 +60,4 @@ app:
       order-placed: order.placed
       order-confirmed: order.confirmed
       order-cancelled: order.cancelled
+
