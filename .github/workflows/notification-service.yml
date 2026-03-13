@@ -1,0 +1,60 @@
+name: Notification Service CI
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - "services/support-services/notification-service/**"
+      - "shared/**"
+      - ".github/workflows/notification-service.yml"
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - "services/support-services/notification-service/**"
+      - "shared/**"
+      - ".github/workflows/notification-service.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: maven
+
+      - name: Gitleaks scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+      - name: Install parent POM
+        run: mvn install -N -DskipTests
+
+      - name: Install shared modules
+        run: mvn install -pl shared/common-dtos,shared/common-exceptions -DskipTests
+
+      - name: Build notification-service
+        run: mvn -pl services/support-services/notification-service clean package -DskipTests
+
+      - name: Build Docker image
+        run: |
+          docker build -t notification-service:${{ github.sha }} \
+            services/support-services/notification-service/
+
+      - name: Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: notification-service:${{ github.sha }}
+          format: table
+          exit-code: "1"
+          severity: CRITICAL
