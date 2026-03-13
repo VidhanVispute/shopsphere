@@ -158,6 +158,54 @@ spring:
                 redis-rate-limiter.burstCapacity: 100
                 key-resolver: "#{@ipKeyResolver}"
 
+        - id: payment-service-internal
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/internal/payments/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@ipKeyResolver}"
+
+        - id: payment-service-webhook
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/payments/webhook/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@ipKeyResolver}"
+
+        - id: payment-service-user
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/payments/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@ipKeyResolver}"
+
+        - id: payment-service-admin
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/admin/payments/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@ipKeyResolver}"
+
         # ── Inventory Service ─────────────────────────────────────
         - id: inventory-service
           uri: lb://inventory-service

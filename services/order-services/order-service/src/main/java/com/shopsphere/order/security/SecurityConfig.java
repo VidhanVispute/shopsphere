@@ -56,6 +56,7 @@ public class SecurityConfig {
                 // Admin endpoints — admins only
                 .requestMatchers(HttpMethod.GET, "/admin/orders").hasAuthority("ROLE_ADMIN")
                 .requestMatchers(HttpMethod.PUT, "/admin/orders/*/status").hasAuthority("ROLE_ADMIN")
+                .requestMatchers("/internal/orders/**").permitAll()
 
                 .anyRequest().authenticated()
             );
