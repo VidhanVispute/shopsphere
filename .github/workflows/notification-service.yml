@@ -59,3 +59,27 @@ jobs:
           format: table
           exit-code: "1"
           severity: CRITICAL
+
+      - name: Configure AWS credentials
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Push to ECR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY=notification-service
+          IMAGE_TAG=${{ github.sha }}
+          docker tag notification-service:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag notification-service:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
