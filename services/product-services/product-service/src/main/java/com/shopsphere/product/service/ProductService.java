@@ -1,15 +1,15 @@
 package com.shopsphere.product.service;
 
+import com.shopsphere.common.dto.ProductEvent;
 import com.shopsphere.common.exception.BadRequestException;
 import com.shopsphere.common.exception.ResourceNotFoundException;
 import com.shopsphere.product.dto.request.CreateProductRequest;
 import com.shopsphere.product.dto.request.UpdateProductRequest;
 import com.shopsphere.product.dto.response.ProductResponse;
-import java.util.concurrent.CompletableFuture;
 import com.shopsphere.product.entity.Category;
 import com.shopsphere.product.entity.Product;
 import com.shopsphere.product.entity.ProductImage;
-import com.shopsphere.product.event.ProductCreatedEvent;
+import com.shopsphere.product.messaging.ProductEventPublisher;
 import com.shopsphere.product.repository.CategoryRepository;
 import com.shopsphere.product.repository.ProductImageRepository;
 import com.shopsphere.product.repository.ProductRepository;
@@ -17,9 +17,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,12 +32,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ProductService {
 
-    private final ProductRepository        productRepository;
-    private final CategoryRepository       categoryRepository;
-    private final ProductImageRepository   productImageRepository;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final ProductRepository productRepository;
+    private final CategoryRepository categoryRepository;
+    private final ProductImageRepository productImageRepository;
+    private final ProductEventPublisher eventPublisher;
 
-    // ── Public endpoints ─────────────────────────────────────────────────────
+    // ── Public endpoints ──────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public Page<ProductResponse> getActiveProducts(Pageable pageable) {
@@ -47,11 +48,10 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public ProductResponse getProductById(UUID id) {
-        Product product = findActiveById(id);
-        return toResponse(product);
+        return toResponse(findActiveById(id));
     }
 
-    // ── Vendor endpoints ─────────────────────────────────────────────────────
+    // ── Vendor endpoints ──────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public Page<ProductResponse> getMyProducts(UUID vendorId, Pageable pageable) {
@@ -74,17 +74,16 @@ public class ProductService {
                 .status(Product.Status.ACTIVE)
                 .build();
 
-        // Attach images
         if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
-            List<ProductImage> images = buildImages(request.getImageUrls(), product);
-            product.getImages().addAll(images);
+            product.getImages().addAll(buildImages(request.getImageUrls(), product));
         }
 
         Product saved = productRepository.save(product);
         log.info("Product created: id={}, vendorId={}", saved.getId(), vendorId);
 
-        // Publish Kafka event — fire and forget
-        publishProductCreatedEvent(saved);
+        // Publish after commit so ES indexing sees a committed product
+        registerAfterCommit(() -> eventPublisher.publishProductCreated(
+                buildEvent(saved, ProductEvent.EventType.PRODUCT_CREATED)));
 
         return toResponse(saved);
     }
@@ -94,7 +93,6 @@ public class ProductService {
                                          String requesterRole, UpdateProductRequest request) {
         Product product = findById(productId);
 
-        // Vendor can only update their own; ADMIN can update any
         if ("VENDOR".equals(requesterRole) && !product.getVendorId().equals(requesterId)) {
             throw new BadRequestException("You do not own this product");
         }
@@ -106,15 +104,17 @@ public class ProductService {
         if (request.getStatus() != null)        product.setStatus(request.getStatus());
         if (request.getCategoryId() != null)    product.setCategory(resolveCategory(request.getCategoryId()));
 
-        // Replace images if provided
         if (request.getImageUrls() != null) {
             product.getImages().clear();
-            List<ProductImage> images = buildImages(request.getImageUrls(), product);
-            product.getImages().addAll(images);
+            product.getImages().addAll(buildImages(request.getImageUrls(), product));
         }
 
         Product saved = productRepository.save(product);
         log.info("Product updated: id={}", saved.getId());
+
+        registerAfterCommit(() -> eventPublisher.publishProductUpdated(
+                buildEvent(saved, ProductEvent.EventType.PRODUCT_UPDATED)));
+
         return toResponse(saved);
     }
 
@@ -126,13 +126,45 @@ public class ProductService {
             throw new BadRequestException("You do not own this product");
         }
 
-        // Soft delete
         product.setStatus(Product.Status.DELETED);
         productRepository.save(product);
         log.info("Product soft-deleted: id={}", productId);
+
+        registerAfterCommit(() -> eventPublisher.publishProductDeleted(
+                buildEvent(product, ProductEvent.EventType.PRODUCT_DELETED)));
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private void registerAfterCommit(Runnable action) {
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        action.run();
+                    }
+                });
+    }
+
+    private ProductEvent buildEvent(Product product, ProductEvent.EventType type) {
+        String primaryImage = product.getImages().stream()
+                .filter(ProductImage::getIsPrimary)
+                .map(ProductImage::getUrl)
+                .findFirst().orElse(null);
+
+        return ProductEvent.builder()
+                .eventType(type)
+                .productId(product.getId())
+                .name(product.getName())
+                .description(product.getDescription())
+                .price(product.getPrice())
+                .categoryId(product.getCategory() != null ? product.getCategory().getId() : null)
+                .categoryName(product.getCategory() != null ? product.getCategory().getName() : null)
+                .vendorId(product.getVendorId())
+                .status(product.getStatus().name())
+                .primaryImageUrl(primaryImage)
+                .build();
+    }
 
     private Product findById(UUID id) {
         return productRepository.findById(id)
@@ -150,8 +182,7 @@ public class ProductService {
     private Category resolveCategory(UUID categoryId) {
         if (categoryId == null) return null;
         return categoryRepository.findById(categoryId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Category not found: " + categoryId));
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + categoryId));
     }
 
     private List<ProductImage> buildImages(List<String> urls, Product product) {
@@ -161,46 +192,11 @@ public class ProductService {
                     .product(product)
                     .url(urls.get(i))
                     .displayOrder(i)
-                    .isPrimary(i == 0) // first image is primary
+                    .isPrimary(i == 0)
                     .build());
         }
         return images;
     }
-
-    private void publishProductCreatedEvent(Product product) {
-
-    CompletableFuture.runAsync(() -> {
-        try {
-            String primaryImage = product.getImages().stream()
-                    .filter(ProductImage::getIsPrimary)
-                    .map(ProductImage::getUrl)
-                    .findFirst()
-                    .orElse(null);
-
-            ProductCreatedEvent event = ProductCreatedEvent.builder()
-                    .productId(product.getId())
-                    .name(product.getName())
-                    .description(product.getDescription())
-                    .price(product.getPrice())
-                    .categoryId(product.getCategory() != null ? product.getCategory().getId() : null)
-                    .categoryName(product.getCategory() != null ? product.getCategory().getName() : null)
-                    .vendorId(product.getVendorId())
-                    .primaryImageUrl(primaryImage)
-                    .build();
-
-            kafkaTemplate.send("product-created", product.getId().toString(), event);
-
-            log.info("ProductCreatedEvent published: productId={}", product.getId());
-
-        } catch (Exception e) {
-            log.error("Failed to publish ProductCreatedEvent for productId={}: {}",
-                    product.getId(), e.getMessage());
-        }
-    });
-
-}
-
-    // ── Mapper ───────────────────────────────────────────────────────────────
 
     private ProductResponse toResponse(Product product) {
         List<String> imageUrls = product.getImages().stream()

@@ -63,8 +63,8 @@
         <!-- Products -->
         <module>services/product-services/product-service</module>
         <module>services/product-services/inventory-service</module>
-        <!-- <module>services/product-services/search-service</module>
-        <module>services/product-services/review-service</module> -->
+        <module>services/product-services/search-service</module>
+        <!-- <module>services/product-services/review-service</module> -->
 
         <!-- Orders -->
         <module>services/order-services/order-service</module>
